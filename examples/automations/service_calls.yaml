@@ -1,0 +1,21 @@
+- service: ha_llm_automation_builder.generate_automation
+  data:
+    description: "Włącz światło w salonie po zachodzie słońca gdy ktoś jest w domu"
+    entity_hints:
+      - light.salon
+      - person.jan
+    template: swiatla
+    style: readable
+
+- service: ha_llm_automation_builder.validate_automation_yaml
+  data:
+    yaml: |
+      alias: Przyklad
+      trigger:
+        - platform: state
+          entity_id: binary_sensor.drzwi
+          to: "on"
+      action:
+        - service: light.turn_on
+          target:
+            entity_id: light.korytarz

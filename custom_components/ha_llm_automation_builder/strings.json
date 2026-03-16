@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LLM Automation Builder",
+        "description": "Configure provider and generation settings."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LLM Automation Builder options",
+        "description": "Update generation and safety settings."
+      }
+    }
+  }
+}
