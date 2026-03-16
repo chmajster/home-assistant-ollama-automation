@@ -1,0 +1,73 @@
+generate_automation:
+  name: Generate automation
+  description: Generate Home Assistant automation YAML from natural language.
+  fields:
+    description:
+      required: true
+      selector:
+        text:
+    alias:
+      selector:
+        text:
+    entity_hints:
+      selector:
+        object:
+    existing_yaml:
+      selector:
+        text:
+    style:
+      selector:
+        select:
+          options:
+            - minimalist
+            - readable
+            - advanced
+    template:
+      selector:
+        select:
+          options:
+            - swiatla
+            - alarm
+            - obecnosc
+            - ogrzewanie
+            - rolety
+            - powiadomienia
+
+validate_automation_yaml:
+  name: Validate automation YAML
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+
+explain_automation:
+  name: Explain automation
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+
+improve_automation:
+  name: Improve automation
+  fields:
+    description:
+      required: true
+      selector:
+        text:
+    yaml:
+      required: true
+      selector:
+        text:
+
+list_available_models:
+  name: List available models
+
+generate_blueprint:
+  name: Generate blueprint
+  fields:
+    description:
+      required: true
+      selector:
+        text:

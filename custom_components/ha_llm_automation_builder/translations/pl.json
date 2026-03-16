@@ -1,0 +1,19 @@
+{
+  "title": "LLM Automation Builder",
+  "config": {
+    "step": {
+      "user": {
+        "title": "LLM Automation Builder",
+        "description": "Ustaw endpoint providera i opcje modelu."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje",
+        "description": "Edytuj opcje działania LLM"
+      }
+    }
+  }
+}
