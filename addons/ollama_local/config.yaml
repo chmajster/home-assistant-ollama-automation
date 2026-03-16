@@ -1,0 +1,25 @@
+name: "Ollama Local"
+description: "Local Ollama server for Home Assistant LLM Automation Builder."
+version: "0.1.0"
+slug: "ollama_local"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: services
+boot: auto
+ports:
+  11434/tcp: 11434
+options:
+  model: "llama3.2:3b"
+  auto_pull: true
+  keep_alive: "5m"
+  origins: "*"
+schema:
+  model: str
+  auto_pull: bool
+  keep_alive: str
+  origins: str

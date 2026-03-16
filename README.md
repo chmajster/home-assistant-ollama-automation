@@ -70,6 +70,16 @@ See `examples/automations/service_calls.yaml`.
 - Safe mode reduces but does not fully remove model risks.
 - Always review generated YAML before production use.
 
+## Home Assistant Add-on installation (Ollama Local)
+1. Home Assistant -> Settings -> Add-ons -> Add-on Store -> 3-dot menu -> Repositories.
+2. Add repository URL: `https://github.com/chmajster/home-assistant-ollama-automation`
+3. Install add-on: **Ollama Local**.
+4. Start add-on and verify it exposes port `11434`.
+5. In integration config flow set:
+   - provider: `ollama`
+   - base URL: `http://homeassistant:11434` (or HA host IP + `:11434`)
+   - model: same as add-on model option
+
 ## Configuration screenshots (placeholders)
 - `![Config Flow Placeholder](docs/screenshots/config-flow-placeholder.png)`
 - `![Options Flow Placeholder](docs/screenshots/options-flow-placeholder.png)`
