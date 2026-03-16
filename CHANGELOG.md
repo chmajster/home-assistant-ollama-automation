@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+- Added automatic config-entry reload after options changes so updated endpoint/model settings apply immediately.
+- Version bump for integration and add-on packaging refresh.
+
 ## 1.2.0
 - Added GUI entities for end users: prompt text input and action buttons (generate, test connection, refresh models, pull model).
 - Added service `pull_ollama_model` for downloading model on local or external Ollama endpoint.

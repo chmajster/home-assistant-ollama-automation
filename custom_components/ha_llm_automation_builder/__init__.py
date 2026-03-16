@@ -28,6 +28,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.const import Platform
 
@@ -52,6 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     runtime = IntegrationRuntime(conf, adapter, coordinator, HistoryStore(hass), {}, "")
     hass.data[DOMAIN][entry.entry_id] = runtime
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await async_register_services(hass)
     await hass.config_entries.async_forward_entry_setups(
