@@ -9,7 +9,7 @@ arch:
   - armv7
   - i386
 startup: services
-boot: autoinit
+boot: auto
 init: false
 ports:
   3306/tcp: 3306
