@@ -19,10 +19,10 @@ from .const import (
 )
 from .helpers.entity_context import collect_entities
 from .helpers.prompt_builder import build_prompt
-from .helpers.yaml_tools import strip_markdown_fences
+from .helpers.yaml_tools import extract_llm_payload_text
 from .llm.base import GenerationRequest
 from .storage import build_history_item
-from .validators import validate_automation_yaml
+from .validators import dry_run_automation_yaml, validate_automation_yaml
 
 GENERATE_SCHEMA = vol.Schema(
     {
@@ -66,8 +66,8 @@ async def async_register_services(hass: HomeAssistant) -> None:
             timeout=runtime.config["timeout"],
         )
         response = await runtime.adapter.generate(request)
-        yaml_text = strip_markdown_fences(response.text)
-        validation = validate_automation_yaml(yaml_text)
+        yaml_text = extract_llm_payload_text(response.text)
+        validation = validate_automation_yaml(yaml_text, known_entities=set(hass.states.async_entity_ids()))
         result = {
             ATTR_YAML: yaml_text,
             ATTR_EXPLANATION: "Generated automation based on your description.",
@@ -88,8 +88,21 @@ async def async_register_services(hass: HomeAssistant) -> None:
         return result
 
     async def validate_yaml(call: ServiceCall) -> ServiceResponse:
-        validation = validate_automation_yaml(call.data["yaml"])
+        validation = validate_automation_yaml(call.data["yaml"], known_entities=set(hass.states.async_entity_ids()))
         return {"valid": validation.valid, "warnings": validation.warnings, "errors": validation.errors}
+
+    async def dry_run(call: ServiceCall) -> ServiceResponse:
+        known_entities = set(hass.states.async_entity_ids())
+        entity_states = call.data.get("entity_states", {})
+        result = dry_run_automation_yaml(call.data["yaml"], entity_states=entity_states, known_entities=known_entities)
+        return {
+            "valid": result.valid,
+            "warnings": result.warnings,
+            "errors": result.errors,
+            "trigger_matches": result.trigger_matches,
+            "conditions_passed": result.conditions_passed,
+            "would_execute": result.would_execute,
+        }
 
     async def explain(call: ServiceCall) -> ServiceResponse:
         runtime = await _resolve_runtime()
@@ -119,7 +132,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
             timeout=runtime.config["timeout"],
         )
         response = await runtime.adapter.generate(request)
-        improved = strip_markdown_fences(response.text)
+        improved = extract_llm_payload_text(response.text)
         return {"improved_yaml": improved, "diff_summary": "Model-provided improvement applied."}
 
     async def list_models(call: ServiceCall) -> ServiceResponse:
@@ -139,7 +152,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
             timeout=runtime.config["timeout"],
         )
         response = await runtime.adapter.generate(request)
-        content = strip_markdown_fences(response.text)
+        content = extract_llm_payload_text(response.text)
         export_dir = Path(hass.config.path("storage")) / EXPORT_DIR
         export_dir.mkdir(parents=True, exist_ok=True)
         path = export_dir / "generated_blueprint.yaml"
@@ -154,6 +167,13 @@ async def async_register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(DOMAIN, "validate_automation_yaml", validate_yaml, schema=vol.Schema({vol.Required("yaml"): str}), supports_response=SupportsResponse.ONLY)
+    hass.services.async_register(
+        DOMAIN,
+        "dry_run_automation",
+        dry_run,
+        schema=vol.Schema({vol.Required("yaml"): str, vol.Optional("entity_states", default={}): dict}),
+        supports_response=SupportsResponse.ONLY,
+    )
     hass.services.async_register(DOMAIN, "explain_automation", explain, schema=vol.Schema({vol.Required("yaml"): str}), supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, "improve_automation", improve, schema=vol.Schema({vol.Required("description"): str, vol.Required("yaml"): str}), supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, "list_available_models", list_models, supports_response=SupportsResponse.ONLY)
@@ -164,6 +184,7 @@ async def async_unregister_services(hass: HomeAssistant) -> None:
     for service in (
         "generate_automation",
         "validate_automation_yaml",
+        "dry_run_automation",
         "explain_automation",
         "improve_automation",
         "list_available_models",
