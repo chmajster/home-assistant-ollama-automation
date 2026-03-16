@@ -18,8 +18,11 @@ async def async_setup_entry(
     async_add_entities(
         [
             LastYamlSensor(runtime),
+            LastYamlLegacySensor(runtime),
             LlmStatusSensor(runtime),
+            LlmStatusLegacySensor(runtime),
             SelectedModelSensor(runtime),
+            SelectedModelLegacySensor(runtime),
         ]
     )
 
@@ -33,7 +36,7 @@ class BaseRuntimeSensor(CoordinatorEntity, SensorEntity):
 
 
 class LastYamlSensor(BaseRuntimeSensor):
-    _attr_name = "ostatni_wygenerowany_yaml"
+    _attr_name = "llm_last_yaml"
 
     @property
     def native_value(self) -> str:
@@ -41,7 +44,7 @@ class LastYamlSensor(BaseRuntimeSensor):
 
 
 class LlmStatusSensor(BaseRuntimeSensor):
-    _attr_name = "status_llm"
+    _attr_name = "llm_status"
 
     @property
     def native_value(self) -> str:
@@ -49,8 +52,20 @@ class LlmStatusSensor(BaseRuntimeSensor):
 
 
 class SelectedModelSensor(BaseRuntimeSensor):
-    _attr_name = "wybrany_model"
+    _attr_name = "llm_model"
 
     @property
     def native_value(self) -> str:
         return self.runtime.config["model"]
+
+
+class LastYamlLegacySensor(LastYamlSensor):
+    _attr_name = "ostatni_wygenerowany_yaml"
+
+
+class LlmStatusLegacySensor(LlmStatusSensor):
+    _attr_name = "status_llm"
+
+
+class SelectedModelLegacySensor(SelectedModelSensor):
+    _attr_name = "wybrany_model"

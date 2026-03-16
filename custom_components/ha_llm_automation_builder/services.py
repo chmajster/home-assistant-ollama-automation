@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import difflib
+import time
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
@@ -18,17 +20,23 @@ from .const import (
     ATTR_YAML,
     CONF_API_KEY,
     CONF_BASE_URL,
+    CONF_HISTORY_LIMIT,
+    CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_OLLAMA_HOST,
     CONF_OLLAMA_PORT,
     CONF_PROVIDER,
+    CONF_SYSTEM_PROMPT,
+    CONF_TEMPERATURE,
     CONF_TIMEOUT,
+    CONF_TOP_P,
     DOMAIN,
     DEFAULT_OLLAMA_PORT,
     EXPORT_DIR,
     PROVIDER_OLLAMA,
     PROVIDER_OPENAI_COMPATIBLE,
 )
+from .automation_manager import async_create_or_update_automation, async_get_automation
 from .helpers.errors import ModelUnavailableError, ProviderConnectionError
 from .helpers.entity_context import collect_entities
 from .helpers.provider_runtime import build_provider_adapter, resolve_provider_base_url
@@ -46,6 +54,11 @@ GENERATE_SCHEMA = vol.Schema(
         vol.Optional("existing_yaml"): str,
         vol.Optional("style", default="readable"): vol.In(["minimalist", "readable", "advanced"]),
         vol.Optional("template"): str,
+        vol.Optional(CONF_MODEL): str,
+        vol.Optional(CONF_TEMPERATURE): vol.Coerce(float),
+        vol.Optional(CONF_TOP_P): vol.Coerce(float),
+        vol.Optional(CONF_MAX_TOKENS): int,
+        vol.Optional(CONF_SYSTEM_PROMPT): str,
     }
 )
 
@@ -62,6 +75,43 @@ PULL_MODEL_SCHEMA = vol.Schema(
     {
         **PROVIDER_OVERRIDE_FIELDS,
         vol.Required(CONF_MODEL): str,
+    }
+)
+
+CREATE_AUTOMATION_SCHEMA = vol.Schema(
+    {
+        vol.Required("yaml"): str,
+        vol.Optional("enabled"): bool,
+    }
+)
+
+OVERWRITE_AUTOMATION_SCHEMA = vol.Schema(
+    {
+        vol.Required("yaml"): str,
+        vol.Required("target"): str,
+        vol.Optional("enabled"): bool,
+    }
+)
+
+LOAD_AUTOMATION_SCHEMA = vol.Schema(
+    {
+        vol.Required("target"): str,
+    }
+)
+
+MODIFY_AUTOMATION_SCHEMA = vol.Schema(
+    {
+        vol.Required("target"): str,
+        vol.Required("description"): str,
+        vol.Optional("entity_hints", default=[]): [str],
+        vol.Optional(CONF_MODEL): str,
+        vol.Optional(CONF_TEMPERATURE): vol.Coerce(float),
+        vol.Optional(CONF_TOP_P): vol.Coerce(float),
+        vol.Optional(CONF_MAX_TOKENS): int,
+        vol.Optional(CONF_SYSTEM_PROMPT): str,
+        vol.Optional("create_mode", default="overwrite"): vol.In(["overwrite", "create_new"]),
+        vol.Optional("apply_changes", default=False): bool,
+        vol.Optional("enable", default=False): bool,
     }
 )
 
@@ -101,9 +151,43 @@ async def async_register_services(hass: HomeAssistant) -> None:
         )
         return runtime, provider, base_url, adapter
 
+    def _build_diff_summary(old_yaml: str, new_yaml: str) -> str:
+        diff_lines = list(
+            difflib.unified_diff(
+                old_yaml.splitlines(),
+                new_yaml.splitlines(),
+                lineterm="",
+            )
+        )
+        added = sum(1 for line in diff_lines if line.startswith("+") and not line.startswith("+++"))
+        removed = sum(1 for line in diff_lines if line.startswith("-") and not line.startswith("---"))
+        if added == 0 and removed == 0:
+            return "No textual changes detected."
+        return f"Changed lines: +{added} / -{removed}"
+
+    async def _list_models_with_cache(runtime, provider: str, base_url: str, adapter) -> list[str]:
+        cache_ttl = 30
+        cache_key = f"{provider}:{base_url}"
+        cache_item = runtime.model_cache.get(cache_key, {})
+        if cache_item and time.time() - cache_item.get("timestamp", 0) <= cache_ttl:
+            return cache_item.get("models", [])
+        models = await adapter.list_models()
+        runtime.model_cache[cache_key] = {"timestamp": time.time(), "models": models}
+        return models
+
     async def generate(call: ServiceCall) -> ServiceResponse:
         runtime = await _resolve_runtime()
+        last_call = runtime.model_cache.get("last_generate_ts", 0.0)
+        now = time.time()
+        if now - last_call < 0.3:
+            raise HomeAssistantError("Rate limit: wait a moment before generating again.")
+        runtime.model_cache["last_generate_ts"] = now
         entity_hints = collect_entities(call.data.get("entity_hints", []))
+        model = call.data.get(CONF_MODEL, runtime.config["model"])
+        temperature = call.data.get(CONF_TEMPERATURE, runtime.config["temperature"])
+        top_p = call.data.get(CONF_TOP_P, runtime.config["top_p"])
+        max_tokens = call.data.get(CONF_MAX_TOKENS, runtime.config["max_tokens"])
+        system_prompt = call.data.get(CONF_SYSTEM_PROMPT, runtime.config["system_prompt"])
         prompt = build_prompt(
             user_description=call.data["description"],
             response_language=runtime.config["response_language"],
@@ -115,11 +199,11 @@ async def async_register_services(hass: HomeAssistant) -> None:
         )
         request = GenerationRequest(
             prompt=prompt,
-            system_prompt=runtime.config["system_prompt"],
-            model=runtime.config["model"],
-            temperature=runtime.config["temperature"],
-            top_p=runtime.config["top_p"],
-            max_tokens=runtime.config["max_tokens"],
+            system_prompt=system_prompt,
+            model=model,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
             timeout=runtime.config["timeout"],
         )
         response = await runtime.adapter.generate(request)
@@ -132,14 +216,21 @@ async def async_register_services(hass: HomeAssistant) -> None:
             ATTR_ASSUMPTIONS: [],
             ATTR_METADATA: {
                 "provider": runtime.config["provider"],
-                "model": runtime.config["model"],
+                "model": model,
                 "valid": validation.valid,
                 "errors": validation.errors,
             },
         }
         runtime.last_result = result
         await runtime.history_store.async_append(
-            build_history_item(runtime.config["provider"], runtime.config["model"], call.data["description"], yaml_text),
+            build_history_item(
+                runtime.config["provider"],
+                model,
+                call.data["description"],
+                yaml_text,
+                explanation=result[ATTR_EXPLANATION],
+                warnings=result[ATTR_WARNINGS],
+            ),
             runtime.config["history_limit"],
         )
         return result
@@ -192,10 +283,239 @@ async def async_register_services(hass: HomeAssistant) -> None:
         improved = extract_llm_payload_text(response.text)
         return {"improved_yaml": improved, "diff_summary": "Model-provided improvement applied."}
 
+    async def create_automation_from_yaml(call: ServiceCall) -> ServiceResponse:
+        runtime = await _resolve_runtime()
+        validation = validate_automation_yaml(call.data["yaml"], known_entities=set(hass.states.async_entity_ids()))
+        if not validation.valid:
+            return {
+                "ok": False,
+                "error": "validation_failed",
+                "validation": {"valid": validation.valid, "errors": validation.errors, "warnings": validation.warnings},
+            }
+        result = await async_create_or_update_automation(
+            hass=hass,
+            yaml_text=call.data["yaml"],
+            mode="create",
+            enabled=call.data.get("enabled", False),
+        )
+        await runtime.history_store.async_append(
+            build_history_item(
+                runtime.config["provider"],
+                runtime.config["model"],
+                prompt="create_automation_from_yaml",
+                yaml=call.data["yaml"],
+                create_status="created" if result.ok else "error",
+                created_automation_id=result.automation_id,
+                modification_mode="create",
+                warnings=result.warnings,
+            ),
+            runtime.config.get(CONF_HISTORY_LIMIT, 25),
+        )
+        return {
+            "ok": result.ok,
+            "mode": result.mode,
+            "automation_id": result.automation_id,
+            "entity_id": result.entity_id,
+            "alias": result.alias,
+            "warnings": result.warnings,
+            "error": result.error,
+        }
+
+    async def create_and_enable_automation_from_yaml(call: ServiceCall) -> ServiceResponse:
+        runtime = await _resolve_runtime()
+        validation = validate_automation_yaml(call.data["yaml"], known_entities=set(hass.states.async_entity_ids()))
+        if not validation.valid:
+            return {
+                "ok": False,
+                "error": "validation_failed",
+                "validation": {"valid": validation.valid, "errors": validation.errors, "warnings": validation.warnings},
+            }
+        result = await async_create_or_update_automation(
+            hass=hass,
+            yaml_text=call.data["yaml"],
+            mode="create",
+            enabled=True,
+        )
+        await runtime.history_store.async_append(
+            build_history_item(
+                runtime.config["provider"],
+                runtime.config["model"],
+                prompt="create_and_enable_automation_from_yaml",
+                yaml=call.data["yaml"],
+                create_status="created_enabled" if result.ok else "error",
+                created_automation_id=result.automation_id,
+                modification_mode="create",
+                warnings=result.warnings,
+            ),
+            runtime.config.get(CONF_HISTORY_LIMIT, 25),
+        )
+        return {
+            "ok": result.ok,
+            "mode": result.mode,
+            "automation_id": result.automation_id,
+            "entity_id": result.entity_id,
+            "alias": result.alias,
+            "warnings": result.warnings,
+            "error": result.error,
+        }
+
+    async def overwrite_automation_from_yaml(call: ServiceCall) -> ServiceResponse:
+        runtime = await _resolve_runtime()
+        validation = validate_automation_yaml(call.data["yaml"], known_entities=set(hass.states.async_entity_ids()))
+        if not validation.valid:
+            return {
+                "ok": False,
+                "error": "validation_failed",
+                "validation": {"valid": validation.valid, "errors": validation.errors, "warnings": validation.warnings},
+            }
+        result = await async_create_or_update_automation(
+            hass=hass,
+            yaml_text=call.data["yaml"],
+            mode="overwrite",
+            enabled=call.data.get("enabled"),
+            target_identifier=call.data["target"],
+        )
+        await runtime.history_store.async_append(
+            build_history_item(
+                runtime.config["provider"],
+                runtime.config["model"],
+                prompt=f"overwrite:{call.data['target']}",
+                yaml=call.data["yaml"],
+                create_status="overwritten" if result.ok else "error",
+                created_automation_id=result.automation_id,
+                source_automation_id=call.data["target"],
+                modification_mode="overwrite",
+                warnings=result.warnings,
+            ),
+            runtime.config.get(CONF_HISTORY_LIMIT, 25),
+        )
+        return {
+            "ok": result.ok,
+            "mode": result.mode,
+            "automation_id": result.automation_id,
+            "entity_id": result.entity_id,
+            "alias": result.alias,
+            "warnings": result.warnings,
+            "error": result.error,
+        }
+
+    async def load_existing_automation(call: ServiceCall) -> ServiceResponse:
+        item = await async_get_automation(hass, call.data["target"])
+        if item is None:
+            return {"ok": False, "error": "automation_not_found", "target": call.data["target"]}
+        return {"ok": True, **item}
+
+    async def modify_automation_with_ollama(call: ServiceCall) -> ServiceResponse:
+        runtime = await _resolve_runtime()
+        last_call = runtime.model_cache.get("last_modify_ts", 0.0)
+        now = time.time()
+        if now - last_call < 0.3:
+            raise HomeAssistantError("Rate limit: wait a moment before modifying again.")
+        runtime.model_cache["last_modify_ts"] = now
+        source = await async_get_automation(hass, call.data["target"])
+        if source is None:
+            return {"ok": False, "error": "automation_not_found", "target": call.data["target"]}
+
+        model = call.data.get(CONF_MODEL, runtime.config["model"])
+        temperature = call.data.get(CONF_TEMPERATURE, runtime.config["temperature"])
+        top_p = call.data.get(CONF_TOP_P, runtime.config["top_p"])
+        max_tokens = call.data.get(CONF_MAX_TOKENS, runtime.config["max_tokens"])
+        system_prompt = call.data.get(CONF_SYSTEM_PROMPT, runtime.config["system_prompt"])
+
+        entity_hints = collect_entities(call.data.get("entity_hints", []))
+        prompt = build_prompt(
+            user_description=call.data["description"],
+            response_language=runtime.config["response_language"],
+            safe_mode=runtime.config["safe_mode"],
+            entity_hints=entity_hints,
+            existing_yaml=source["yaml"],
+            style="advanced",
+        )
+        request = GenerationRequest(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            model=model,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            timeout=runtime.config["timeout"],
+        )
+        response = await runtime.adapter.generate(request)
+        improved_yaml = extract_llm_payload_text(response.text)
+        validation = validate_automation_yaml(improved_yaml, known_entities=set(hass.states.async_entity_ids()))
+        diff_summary = _build_diff_summary(source["yaml"], improved_yaml)
+
+        apply_changes = bool(call.data.get("apply_changes", False))
+        create_mode = call.data.get("create_mode", "overwrite")
+        apply_result: dict[str, Any] | None = None
+        if apply_changes and validation.valid:
+            if create_mode == "overwrite":
+                save = await async_create_or_update_automation(
+                    hass=hass,
+                    yaml_text=improved_yaml,
+                    mode="overwrite",
+                    enabled=call.data.get("enable"),
+                    target_identifier=source["id"] or source["alias"] or call.data["target"],
+                )
+            else:
+                save = await async_create_or_update_automation(
+                    hass=hass,
+                    yaml_text=improved_yaml,
+                    mode="create_new",
+                    enabled=call.data.get("enable", False),
+                )
+            apply_result = {
+                "ok": save.ok,
+                "mode": save.mode,
+                "automation_id": save.automation_id,
+                "entity_id": save.entity_id,
+                "alias": save.alias,
+                "warnings": save.warnings,
+                "error": save.error,
+            }
+        elif apply_changes and not validation.valid:
+            apply_result = {
+                "ok": False,
+                "error": "validation_failed",
+                "validation": {"valid": validation.valid, "errors": validation.errors, "warnings": validation.warnings},
+            }
+
+        await runtime.history_store.async_append(
+            build_history_item(
+                runtime.config["provider"],
+                model,
+                prompt=call.data["description"],
+                yaml=improved_yaml,
+                explanation="Modified existing automation with model assistance.",
+                warnings=validation.warnings,
+                create_status=("applied" if apply_result and apply_result.get("ok") else "preview"),
+                created_automation_id=(apply_result or {}).get("automation_id") if apply_result else None,
+                source_automation_id=source["id"] or source["alias"],
+                modification_mode=create_mode,
+                diff_summary=diff_summary,
+            ),
+            runtime.config.get(CONF_HISTORY_LIMIT, 25),
+        )
+
+        return {
+            "ok": True,
+            "target": call.data["target"],
+            "source_automation": source,
+            "improved_yaml": improved_yaml,
+            "explanation": "Modified existing automation according to your prompt.",
+            "warnings": validation.warnings,
+            "validation": {
+                "valid": validation.valid,
+                "errors": validation.errors,
+            },
+            "diff_summary": diff_summary,
+            "apply_result": apply_result,
+        }
+
     async def list_models(call: ServiceCall) -> ServiceResponse:
-        _, provider, base_url, adapter = await _resolve_adapter(call)
+        runtime, provider, base_url, adapter = await _resolve_adapter(call)
         try:
-            models = await adapter.list_models()
+            models = await _list_models_with_cache(runtime, provider, base_url, adapter)
         except ProviderConnectionError as err:
             return {
                 "ok": False,
@@ -219,7 +539,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
         try:
             connection = await adapter.test_connection()
-            models = await adapter.list_models()
+            models = await _list_models_with_cache(runtime, provider, base_url, adapter)
             model_check = await adapter.test_model(model) if model else {"ok": False}
         except ModelUnavailableError:
             return {
@@ -251,7 +571,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
         }
 
     async def pull_ollama_model(call: ServiceCall) -> ServiceResponse:
-        _, provider, base_url, adapter = await _resolve_adapter(call)
+        runtime, provider, base_url, adapter = await _resolve_adapter(call)
         model = call.data.get(CONF_MODEL)
         if provider != PROVIDER_OLLAMA:
             return {
@@ -264,7 +584,8 @@ async def async_register_services(hass: HomeAssistant) -> None:
 
         try:
             pull_result = await adapter.pull_model(model)
-            models = await adapter.list_models()
+            runtime.model_cache.pop(f"{provider}:{base_url}", None)
+            models = await _list_models_with_cache(runtime, provider, base_url, adapter)
         except ProviderConnectionError as err:
             return {
                 "ok": False,
@@ -347,6 +668,41 @@ async def async_register_services(hass: HomeAssistant) -> None:
         schema=PULL_MODEL_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "create_automation_from_yaml",
+        create_automation_from_yaml,
+        schema=CREATE_AUTOMATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "create_and_enable_automation_from_yaml",
+        create_and_enable_automation_from_yaml,
+        schema=vol.Schema({vol.Required("yaml"): str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "overwrite_automation_from_yaml",
+        overwrite_automation_from_yaml,
+        schema=OVERWRITE_AUTOMATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "load_existing_automation",
+        load_existing_automation,
+        schema=LOAD_AUTOMATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "modify_automation_with_ollama",
+        modify_automation_with_ollama,
+        schema=MODIFY_AUTOMATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
     hass.services.async_register(DOMAIN, "generate_blueprint", generate_blueprint, schema=vol.Schema({vol.Required("description"): str}), supports_response=SupportsResponse.ONLY)
 
 
@@ -360,6 +716,11 @@ async def async_unregister_services(hass: HomeAssistant) -> None:
         "list_available_models",
         "test_provider_connection",
         "pull_ollama_model",
+        "create_automation_from_yaml",
+        "create_and_enable_automation_from_yaml",
+        "overwrite_automation_from_yaml",
+        "load_existing_automation",
+        "modify_automation_with_ollama",
         "generate_blueprint",
     ):
         if hass.services.has_service(DOMAIN, service):

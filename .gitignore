@@ -1,3 +1,4 @@
+<<<<<<< ours
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -12,3 +13,8 @@ htmlcov/
 *.log
 .DS_Store
 storage/
+=======
+*.log
+*.tmp
+.DS_Store
+>>>>>>> theirs

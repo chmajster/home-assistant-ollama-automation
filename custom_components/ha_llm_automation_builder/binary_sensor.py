@@ -15,11 +15,11 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     runtime = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([ConnectionOkBinarySensor(runtime)])
+    async_add_entities([ConnectionOkBinarySensor(runtime), ConnectionOkLegacyBinarySensor(runtime)])
 
 
 class ConnectionOkBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    _attr_name = "polaczenie_ok"
+    _attr_name = "llm_connection"
     _attr_has_entity_name = True
 
     def __init__(self, runtime) -> None:
@@ -28,3 +28,7 @@ class ConnectionOkBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         return self.coordinator.data.get("connection", {}).get("ok", False)
+
+
+class ConnectionOkLegacyBinarySensor(ConnectionOkBinarySensor):
+    _attr_name = "polaczenie_ok"

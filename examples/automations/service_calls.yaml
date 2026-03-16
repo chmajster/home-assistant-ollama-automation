@@ -39,3 +39,24 @@
     ollama_host: 192.168.1.50
     ollama_port: 11434
     model: llama3.2:3b
+
+- service: ha_llm_automation_builder.create_automation_from_yaml
+  data:
+    enabled: false
+    yaml: |
+      alias: LLM example
+      trigger:
+        - platform: state
+          entity_id: binary_sensor.motion
+          to: "on"
+      action:
+        - service: light.turn_on
+          target:
+            entity_id: light.kitchen
+
+- service: ha_llm_automation_builder.modify_automation_with_ollama
+  data:
+    target: llm_example
+    description: "Dodaj warunek po zachodzie slonca i opoznienie 10 sekund"
+    create_mode: overwrite
+    apply_changes: false

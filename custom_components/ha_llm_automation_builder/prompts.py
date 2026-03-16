@@ -13,5 +13,6 @@ PROMPT_TEMPLATES: dict[str, str] = {
 
 SAFE_YAML_RULES = (
     "Return Home Assistant automation YAML only. No markdown fences. "
-    "No comments outside explanation field. If uncertain entity exists, add warning."
+    "No comments outside explanation field. If uncertain entity exists, add warning. "
+    "Do not invent entities. Preserve existing trigger/condition/action unless prompt explicitly changes them."
 )

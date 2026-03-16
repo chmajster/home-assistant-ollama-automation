@@ -1,3 +1,9 @@
+<<<<<<< ours
 name: "HA LLM Automation Add-ons"
 url: "https://github.com/chmajster/home-assistant-ollama-automation"
 maintainer: "Chris"
+=======
+name: "Custom MariaDB Recorder Add-ons"
+url: "https://github.com/example/home-assistant-DataBase-Manage-automation"
+maintainer: "Addon Maintainer <maintainer@example.com>"
+>>>>>>> theirs

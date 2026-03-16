@@ -1,0 +1,53 @@
+name: "MariaDB Recorder Backend"
+version: "1.0.0"
+slug: "mariadb_recorder_backend"
+description: "MariaDB backend helper for Home Assistant recorder (internal or external MariaDB)"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: services
+boot: autoinit
+init: false
+ports:
+  3306/tcp: 3306
+ports_description:
+  3306/tcp: "MariaDB internal instance port (used only in internal_mariadb mode)"
+map:
+  - addon_config:rw
+options:
+  mode: internal_mariadb
+  internal_database: homeassistant
+  internal_username: homeassistant
+  internal_password: ""
+  internal_port: 3306
+  external_host: ""
+  external_port: 3306
+  external_database: homeassistant
+  external_username: homeassistant
+  external_password: ""
+  charset: utf8mb4
+  collation: utf8mb4_unicode_ci
+  ssl_mode: disabled
+  additional_parameters: ""
+  log_level: info
+schema:
+  mode: list(internal_mariadb|external_mariadb)
+  internal_database: str?
+  internal_username: str?
+  internal_password: password?
+  internal_port: port?
+  external_host: str?
+  external_port: port?
+  external_database: str?
+  external_username: str?
+  external_password: password?
+  charset: str?
+  collation: str?
+  ssl_mode: list(disabled|required|verify_ca|verify_identity)?
+  additional_parameters: str?
+  log_level: list(trace|debug|info|notice|warning|error|fatal)?
+image: "ghcr.io/example/{arch}-addon-mariadb-recorder"
+panel_icon: "mdi:database-cog"

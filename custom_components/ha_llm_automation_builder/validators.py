@@ -117,6 +117,9 @@ def _check_action_semantics(data: dict[str, Any], result: ValidationResult) -> N
         if "service" in act and (not isinstance(act["service"], str) or "." not in act["service"]):
             result.valid = False
             result.errors.append(f"Action #{idx + 1} has invalid service format.")
+        service_name = act.get("service")
+        if isinstance(service_name, str) and service_name.startswith(("shell_command.", "python_script.", "rest_command.")):
+            result.warnings.append(f"Action #{idx + 1} uses potentially risky service: {service_name}")
         unexpected = [k for k in act if k not in common_action_keys]
         if unexpected:
             result.warnings.append(f"Action #{idx + 1} contains uncommon keys: {', '.join(unexpected)}")

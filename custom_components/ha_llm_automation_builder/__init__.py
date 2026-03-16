@@ -21,6 +21,7 @@ class IntegrationRuntime:
     history_store: Any
     last_result: dict[str, Any]
     ui_prompt: str
+    model_cache: dict[str, Any]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -36,6 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.const import Platform
 
     from .coordinator import LlmStatusCoordinator
+    from .panel_api import async_register_panel_api
     from .services import async_register_services
     from .storage import HistoryStore
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -54,11 +56,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = LlmStatusCoordinator(hass, adapter, conf["model"])
     await coordinator.async_config_entry_first_refresh()
 
-    runtime = IntegrationRuntime(conf, adapter, coordinator, HistoryStore(hass), {}, "")
+    runtime = IntegrationRuntime(conf, adapter, coordinator, HistoryStore(hass), {}, "", {})
     hass.data[DOMAIN][entry.entry_id] = runtime
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await async_register_services(hass)
+    await async_register_panel_api(hass)
     await hass.config_entries.async_forward_entry_setups(
         entry,
         [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.TEXT],

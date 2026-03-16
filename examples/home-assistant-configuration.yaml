@@ -1,0 +1,5 @@
+# Example Home Assistant configuration snippet
+recorder:
+  db_url: mysql://homeassistant:CHANGE_ME@addon_local_ip:3306/homeassistant?charset=utf8mb4&collation=utf8mb4_unicode_ci
+  purge_keep_days: 14
+  commit_interval: 5

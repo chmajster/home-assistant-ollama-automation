@@ -19,6 +19,13 @@ class HistoryItem:
     model: str
     prompt: str
     yaml: str
+    explanation: str = ""
+    warnings: list[str] | None = None
+    create_status: str | None = None
+    created_automation_id: str | None = None
+    source_automation_id: str | None = None
+    modification_mode: str | None = None
+    diff_summary: str | None = None
 
 
 class HistoryStore:
@@ -37,11 +44,30 @@ class HistoryStore:
         return items
 
 
-def build_history_item(provider: str, model: str, prompt: str, yaml: str) -> HistoryItem:
+def build_history_item(
+    provider: str,
+    model: str,
+    prompt: str,
+    yaml: str,
+    explanation: str = "",
+    warnings: list[str] | None = None,
+    create_status: str | None = None,
+    created_automation_id: str | None = None,
+    source_automation_id: str | None = None,
+    modification_mode: str | None = None,
+    diff_summary: str | None = None,
+) -> HistoryItem:
     return HistoryItem(
         timestamp=datetime.now(tz=UTC).isoformat(),
         provider=provider,
         model=model,
         prompt=prompt,
         yaml=yaml,
+        explanation=explanation,
+        warnings=warnings or [],
+        create_status=create_status,
+        created_automation_id=created_automation_id,
+        source_automation_id=source_automation_id,
+        modification_mode=modification_mode,
+        diff_summary=diff_summary,
     )

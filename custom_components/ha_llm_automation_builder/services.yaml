@@ -32,6 +32,32 @@ generate_automation:
             - ogrzewanie
             - rolety
             - powiadomienia
+    model:
+      selector:
+        text:
+    temperature:
+      selector:
+        number:
+          min: 0
+          max: 2
+          step: 0.1
+          mode: box
+    top_p:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: box
+    max_tokens:
+      selector:
+        number:
+          min: 32
+          max: 8192
+          mode: box
+    system_prompt:
+      selector:
+        text:
 
 validate_automation_yaml:
   name: Validate automation YAML
@@ -179,6 +205,102 @@ pull_ollama_model:
           min: 1
           max: 300
           mode: box
+
+create_automation_from_yaml:
+  name: Create automation from YAML
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+    enabled:
+      selector:
+        boolean:
+
+create_and_enable_automation_from_yaml:
+  name: Create and enable automation from YAML
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+
+overwrite_automation_from_yaml:
+  name: Overwrite existing automation from YAML
+  fields:
+    target:
+      required: true
+      description: Automation id, entity_id, or alias.
+      selector:
+        text:
+    yaml:
+      required: true
+      selector:
+        text:
+    enabled:
+      selector:
+        boolean:
+
+load_existing_automation:
+  name: Load existing automation
+  fields:
+    target:
+      required: true
+      description: Automation id, entity_id, or alias.
+      selector:
+        text:
+
+modify_automation_with_ollama:
+  name: Modify automation with Ollama
+  fields:
+    target:
+      required: true
+      description: Automation id, entity_id, or alias.
+      selector:
+        text:
+    description:
+      required: true
+      description: Explain what to change in selected automation.
+      selector:
+        text:
+    entity_hints:
+      selector:
+        object:
+    model:
+      selector:
+        text:
+    temperature:
+      selector:
+        number:
+          min: 0
+          max: 2
+          step: 0.1
+          mode: box
+    top_p:
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: box
+    max_tokens:
+      selector:
+        number:
+          min: 32
+          max: 8192
+          mode: box
+    create_mode:
+      selector:
+        select:
+          options:
+            - overwrite
+            - create_new
+    apply_changes:
+      selector:
+        boolean:
+    enable:
+      selector:
+        boolean:
 
 generate_blueprint:
   name: Generate blueprint
