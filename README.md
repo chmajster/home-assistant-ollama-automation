@@ -9,6 +9,7 @@ Production-ready custom Home Assistant integration (HACS) for generating, valida
 - Services:
   - `generate_automation`
   - `validate_automation_yaml`
+  - `dry_run_automation`
   - `explain_automation`
   - `improve_automation`
   - `list_available_models`
@@ -17,6 +18,8 @@ Production-ready custom Home Assistant integration (HACS) for generating, valida
 - Prompt templates (lights, alarm, presence, heating, covers, notifications).
 - Entity hints with domain filtering.
 - YAML validation with warnings/errors.
+- Semantic automation validation (entity existence, trigger/action sanity checks).
+- Dry-run simulation service for test-before-save checks.
 - Storage-backed generation history and export file output.
 - Coordinator-driven sensors and binary sensor.
 - Diagnostics with secret redaction.
@@ -58,7 +61,8 @@ See `examples/automations/service_calls.yaml`.
 - Verify endpoint URL and model name using `list_available_models` service.
 - Check sensor `status_llm` and binary sensor `polaczenie_ok`.
 - Review diagnostics for redacted runtime state.
-- If YAML fails validation, use `validate_automation_yaml` and improve prompt clarity.
+- If YAML fails validation, use `validate_automation_yaml` to detect semantic issues in entities/triggers/actions.
+- Use `dry_run_automation` with optional `entity_states` to simulate if trigger + conditions would execute before deploying.
 
 ## Security warnings
 - Prefer local endpoints for sensitive data.
