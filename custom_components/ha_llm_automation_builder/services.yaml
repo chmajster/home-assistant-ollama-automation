@@ -41,6 +41,19 @@ validate_automation_yaml:
       selector:
         text:
 
+dry_run_automation:
+  name: Dry-run automation
+  description: Simulate trigger/condition checks against provided entity states without saving.
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+    entity_states:
+      description: Optional dictionary of test entity states used for trigger/condition simulation.
+      selector:
+        object:
+
 explain_automation:
   name: Explain automation
   fields:

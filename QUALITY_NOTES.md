@@ -5,4 +5,4 @@
 - Services are validated with voluptuous schemas.
 - Diagnostics redact secrets.
 - Unit tests cover validators, prompt builder and YAML tools.
-- Known limitation v1.0.0: LLM response parsing currently assumes plain YAML payload in body; structured JSON parsing can be extended.
+- LLM response parsing includes layered extraction (JSON wrapper → markdown code block → plain text fallback) for better provider interoperability.
