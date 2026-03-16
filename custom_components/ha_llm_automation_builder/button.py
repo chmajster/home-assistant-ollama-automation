@@ -6,6 +6,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -20,10 +21,10 @@ async def async_setup_entry(
     runtime = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         [
-            TestConnectionButton(runtime),
-            RefreshModelsButton(runtime),
-            PullConfiguredModelButton(runtime),
-            GenerateFromPromptButton(runtime),
+            TestConnectionButton(runtime, entry.entry_id),
+            RefreshModelsButton(runtime, entry.entry_id),
+            PullConfiguredModelButton(runtime, entry.entry_id),
+            GenerateFromPromptButton(runtime, entry.entry_id),
         ]
     )
 
@@ -31,9 +32,11 @@ async def async_setup_entry(
 class BaseRuntimeButton(CoordinatorEntity, ButtonEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, runtime) -> None:
+    def __init__(self, runtime, entry_id: str, unique_suffix: str) -> None:
         super().__init__(runtime.coordinator)
         self.runtime = runtime
+        self._entry_id = entry_id
+        self._attr_unique_id = f"{entry_id}_{unique_suffix}"
 
     def _notify(self, title: str, message: str) -> None:
         persistent_notification.async_create(
@@ -43,9 +46,21 @@ class BaseRuntimeButton(CoordinatorEntity, ButtonEntity):
             notification_id=f"{DOMAIN}_{self.__class__.__name__.lower()}",
         )
 
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name=self.runtime.config.get("name", "LLM Automation Builder"),
+            manufacturer="Custom",
+            model="LLM Automation Builder",
+        )
+
 
 class TestConnectionButton(BaseRuntimeButton):
     _attr_name = "test_connection"
+
+    def __init__(self, runtime, entry_id: str) -> None:
+        super().__init__(runtime, entry_id, "test_connection")
 
     async def async_press(self) -> None:
         model = self.runtime.config.get("model")
@@ -74,6 +89,9 @@ class TestConnectionButton(BaseRuntimeButton):
 class RefreshModelsButton(BaseRuntimeButton):
     _attr_name = "refresh_models"
 
+    def __init__(self, runtime, entry_id: str) -> None:
+        super().__init__(runtime, entry_id, "refresh_models")
+
     async def async_press(self) -> None:
         try:
             models = await self.runtime.adapter.list_models()
@@ -89,6 +107,9 @@ class RefreshModelsButton(BaseRuntimeButton):
 
 class PullConfiguredModelButton(BaseRuntimeButton):
     _attr_name = "pull_configured_model"
+
+    def __init__(self, runtime, entry_id: str) -> None:
+        super().__init__(runtime, entry_id, "pull_configured_model")
 
     async def async_press(self) -> None:
         if self.runtime.config.get("provider") != PROVIDER_OLLAMA:
@@ -114,6 +135,9 @@ class PullConfiguredModelButton(BaseRuntimeButton):
 
 class GenerateFromPromptButton(BaseRuntimeButton):
     _attr_name = "generate_automation_from_prompt"
+
+    def __init__(self, runtime, entry_id: str) -> None:
+        super().__init__(runtime, entry_id, "generate_automation_from_prompt")
 
     async def async_press(self) -> None:
         description = (self.runtime.ui_prompt or "").strip()

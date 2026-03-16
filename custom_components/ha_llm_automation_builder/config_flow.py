@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -47,20 +48,47 @@ from .helpers.provider_runtime import build_provider_adapter, resolve_provider_b
 PROVIDERS = [PROVIDER_OLLAMA, PROVIDER_OPENAI_COMPATIBLE]
 
 
+def _infer_ollama_host(defaults: dict[str, Any]) -> str:
+    host = str(defaults.get(CONF_OLLAMA_HOST, DEFAULT_OLLAMA_HOST) or "").strip()
+    if host:
+        return host
+
+    base_url = str(defaults.get(CONF_BASE_URL, "") or "").strip()
+    if not base_url:
+        return DEFAULT_OLLAMA_HOST
+    if "://" not in base_url:
+        base_url = f"http://{base_url}"
+    parsed = urlparse(base_url)
+    return parsed.hostname or DEFAULT_OLLAMA_HOST
+
+
+def _infer_ollama_port(defaults: dict[str, Any]) -> int:
+    explicit = defaults.get(CONF_OLLAMA_PORT)
+    if explicit:
+        return int(explicit)
+
+    base_url = str(defaults.get(CONF_BASE_URL, "") or "").strip()
+    if not base_url:
+        return DEFAULT_OLLAMA_PORT
+    if "://" not in base_url:
+        base_url = f"http://{base_url}"
+    parsed = urlparse(base_url)
+    return int(parsed.port or DEFAULT_OLLAMA_PORT)
+
+
 def _connection_schema(defaults: dict[str, Any], include_name: bool) -> vol.Schema:
     schema: dict[Any, Any] = {}
+    provider_default = defaults.get(CONF_PROVIDER, PROVIDER_OLLAMA)
     if include_name:
         schema[vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME))] = str
-    schema.update(
-        {
-            vol.Required(CONF_PROVIDER, default=defaults.get(CONF_PROVIDER, PROVIDER_OLLAMA)): vol.In(PROVIDERS),
-            vol.Optional(CONF_OLLAMA_HOST, default=defaults.get(CONF_OLLAMA_HOST, DEFAULT_OLLAMA_HOST)): str,
-            vol.Required(CONF_OLLAMA_PORT, default=defaults.get(CONF_OLLAMA_PORT, DEFAULT_OLLAMA_PORT)): int,
-            vol.Required(CONF_BASE_URL, default=defaults.get(CONF_BASE_URL, DEFAULT_OLLAMA_BASE_URL)): str,
-            vol.Optional(CONF_API_KEY, default=defaults.get(CONF_API_KEY, "")): str,
-            vol.Required(CONF_TIMEOUT, default=defaults.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)): int,
-        }
-    )
+    schema[vol.Required(CONF_PROVIDER, default=provider_default)] = vol.In(PROVIDERS)
+    host_marker = vol.Required if provider_default == PROVIDER_OLLAMA else vol.Optional
+    port_marker = vol.Required if provider_default == PROVIDER_OLLAMA else vol.Optional
+    schema[host_marker(CONF_OLLAMA_HOST, default=_infer_ollama_host(defaults))] = str
+    schema[port_marker(CONF_OLLAMA_PORT, default=_infer_ollama_port(defaults))] = int
+    schema[vol.Required(CONF_BASE_URL, default=defaults.get(CONF_BASE_URL, DEFAULT_OLLAMA_BASE_URL))] = str
+    schema[vol.Optional(CONF_API_KEY, default=defaults.get(CONF_API_KEY, ""))] = str
+    schema[vol.Required(CONF_TIMEOUT, default=defaults.get(CONF_TIMEOUT, DEFAULT_TIMEOUT))] = int
     return vol.Schema(schema)
 
 
@@ -105,6 +133,10 @@ async def _validate_connection(
     except ValueError:
         errors[CONF_BASE_URL] = "invalid_base_url"
         return errors, normalized, []
+
+    if normalized[CONF_PROVIDER] == PROVIDER_OLLAMA:
+        normalized[CONF_OLLAMA_HOST] = (user_input.get(CONF_OLLAMA_HOST) or "").strip()
+        normalized[CONF_OLLAMA_PORT] = int(user_input.get(CONF_OLLAMA_PORT) or DEFAULT_OLLAMA_PORT)
 
     session = async_get_clientsession(hass)
     adapter = build_provider_adapter(

@@ -54,7 +54,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     coordinator = LlmStatusCoordinator(hass, adapter, conf["model"])
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
+    if not isinstance(coordinator.data, dict):
+        coordinator.async_set_updated_data(
+            {
+                "connection": {"ok": False},
+                "model": {"ok": False},
+            }
+        )
 
     runtime = IntegrationRuntime(conf, adapter, coordinator, HistoryStore(hass), {}, "", {})
     hass.data[DOMAIN][entry.entry_id] = runtime
