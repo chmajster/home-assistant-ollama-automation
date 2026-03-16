@@ -2,6 +2,8 @@
 
 This add-on runs a local Ollama server inside Home Assistant Supervisor.
 
+Supported architectures: `amd64`, `aarch64`.
+
 ## What it does
 - Starts `ollama serve` on port `11434`.
 - Optionally pulls a model at startup (`auto_pull: true`).

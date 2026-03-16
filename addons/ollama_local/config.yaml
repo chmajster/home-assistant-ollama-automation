@@ -1,14 +1,11 @@
 name: "Ollama Local"
 description: "Local Ollama server for Home Assistant LLM Automation Builder."
-version: "0.1.0"
+version: "0.1.1"
 slug: "ollama_local"
 init: false
 arch:
   - aarch64
   - amd64
-  - armhf
-  - armv7
-  - i386
 startup: services
 boot: auto
 ports:
