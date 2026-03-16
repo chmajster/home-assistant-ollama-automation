@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from .const import DOMAIN, PLATFORMS, PROVIDER_OLLAMA
+from .const import DOMAIN, PLATFORMS
+from .helpers.provider_runtime import build_provider_adapter
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -28,20 +29,22 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.const import Platform
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
     from .coordinator import LlmStatusCoordinator
-    from .llm.ollama import OllamaAdapter
-    from .llm.openai_compatible import OpenAICompatibleAdapter
     from .services import async_register_services
     from .storage import HistoryStore
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
     session = async_get_clientsession(hass)
-    conf = dict(entry.options) if entry.options else dict(entry.data)
-    if conf["provider"] == PROVIDER_OLLAMA:
-        adapter = OllamaAdapter(session, conf["base_url"], conf.get("api_key"))
-    else:
-        adapter = OpenAICompatibleAdapter(session, conf["base_url"], conf.get("api_key"))
+    conf = dict(entry.data)
+    conf.update(entry.options or {})
+    adapter = build_provider_adapter(
+        session=session,
+        provider=conf["provider"],
+        base_url=conf["base_url"],
+        api_key=conf.get("api_key"),
+        timeout=conf.get("timeout"),
+    )
 
     coordinator = LlmStatusCoordinator(hass, adapter, conf["model"])
     await coordinator.async_config_entry_first_refresh()

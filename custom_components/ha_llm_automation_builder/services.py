@@ -7,6 +7,8 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_ASSUMPTIONS,
@@ -14,10 +16,22 @@ from .const import (
     ATTR_METADATA,
     ATTR_WARNINGS,
     ATTR_YAML,
+    CONF_API_KEY,
+    CONF_BASE_URL,
+    CONF_MODEL,
+    CONF_OLLAMA_HOST,
+    CONF_OLLAMA_PORT,
+    CONF_PROVIDER,
+    CONF_TIMEOUT,
     DOMAIN,
+    DEFAULT_OLLAMA_PORT,
     EXPORT_DIR,
+    PROVIDER_OLLAMA,
+    PROVIDER_OPENAI_COMPATIBLE,
 )
+from .helpers.errors import ModelUnavailableError, ProviderConnectionError
 from .helpers.entity_context import collect_entities
+from .helpers.provider_runtime import build_provider_adapter, resolve_provider_base_url
 from .helpers.prompt_builder import build_prompt
 from .helpers.yaml_tools import extract_llm_payload_text
 from .llm.base import GenerationRequest
@@ -35,6 +49,15 @@ GENERATE_SCHEMA = vol.Schema(
     }
 )
 
+PROVIDER_OVERRIDE_FIELDS = {
+    vol.Optional(CONF_PROVIDER): vol.In([PROVIDER_OLLAMA, PROVIDER_OPENAI_COMPATIBLE]),
+    vol.Optional(CONF_BASE_URL): str,
+    vol.Optional(CONF_OLLAMA_HOST): str,
+    vol.Optional(CONF_OLLAMA_PORT, default=DEFAULT_OLLAMA_PORT): int,
+    vol.Optional(CONF_API_KEY): str,
+    vol.Optional(CONF_TIMEOUT): int,
+}
+
 
 async def async_register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, "generate_automation"):
@@ -43,6 +66,33 @@ async def async_register_services(hass: HomeAssistant) -> None:
     async def _resolve_runtime() -> Any:
         entries = list(hass.data[DOMAIN].values())
         return entries[0] if entries else None
+
+    async def _resolve_adapter(call: ServiceCall):
+        runtime = await _resolve_runtime()
+        if runtime is None:
+            raise HomeAssistantError("Integration is not loaded.")
+
+        provider = call.data.get(CONF_PROVIDER, runtime.config[CONF_PROVIDER])
+        try:
+            base_url = resolve_provider_base_url(
+                provider=provider,
+                base_url=call.data.get(CONF_BASE_URL, runtime.config.get(CONF_BASE_URL)),
+                ollama_host=call.data.get(CONF_OLLAMA_HOST, runtime.config.get(CONF_OLLAMA_HOST)),
+                ollama_port=call.data.get(CONF_OLLAMA_PORT, runtime.config.get(CONF_OLLAMA_PORT)),
+            )
+        except ValueError as err:
+            raise HomeAssistantError(str(err)) from err
+        api_key = call.data.get(CONF_API_KEY, runtime.config.get(CONF_API_KEY))
+        timeout = call.data.get(CONF_TIMEOUT, runtime.config.get(CONF_TIMEOUT))
+
+        adapter = build_provider_adapter(
+            session=async_get_clientsession(hass),
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+        )
+        return runtime, provider, base_url, adapter
 
     async def generate(call: ServiceCall) -> ServiceResponse:
         runtime = await _resolve_runtime()
@@ -136,8 +186,62 @@ async def async_register_services(hass: HomeAssistant) -> None:
         return {"improved_yaml": improved, "diff_summary": "Model-provided improvement applied."}
 
     async def list_models(call: ServiceCall) -> ServiceResponse:
-        runtime = await _resolve_runtime()
-        return {"models": await runtime.adapter.list_models()}
+        _, provider, base_url, adapter = await _resolve_adapter(call)
+        try:
+            models = await adapter.list_models()
+        except ProviderConnectionError as err:
+            return {
+                "ok": False,
+                "provider": provider,
+                "base_url": base_url,
+                "models": [],
+                "models_count": 0,
+                "error": str(err),
+            }
+        return {
+            "ok": True,
+            "provider": provider,
+            "base_url": base_url,
+            "models": models,
+            "models_count": len(models),
+        }
+
+    async def test_provider_connection(call: ServiceCall) -> ServiceResponse:
+        runtime, provider, base_url, adapter = await _resolve_adapter(call)
+        model = call.data.get(CONF_MODEL, runtime.config.get(CONF_MODEL))
+
+        try:
+            connection = await adapter.test_connection()
+            models = await adapter.list_models()
+            model_check = await adapter.test_model(model) if model else {"ok": False}
+        except ModelUnavailableError:
+            return {
+                "ok": False,
+                "provider": provider,
+                "base_url": base_url,
+                "model": model,
+                "model_ok": False,
+                "error": "model_not_found",
+            }
+        except ProviderConnectionError as err:
+            return {
+                "ok": False,
+                "provider": provider,
+                "base_url": base_url,
+                "model": model,
+                "model_ok": False,
+                "error": str(err),
+            }
+
+        return {
+            "ok": bool(connection.get("ok")),
+            "provider": provider,
+            "base_url": base_url,
+            "model": model,
+            "model_ok": bool(model_check.get("ok")),
+            "models_count": len(models),
+            "models": models,
+        }
 
     async def generate_blueprint(call: ServiceCall) -> ServiceResponse:
         runtime = await _resolve_runtime()
@@ -176,7 +280,25 @@ async def async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(DOMAIN, "explain_automation", explain, schema=vol.Schema({vol.Required("yaml"): str}), supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, "improve_automation", improve, schema=vol.Schema({vol.Required("description"): str, vol.Required("yaml"): str}), supports_response=SupportsResponse.ONLY)
-    hass.services.async_register(DOMAIN, "list_available_models", list_models, supports_response=SupportsResponse.ONLY)
+    hass.services.async_register(
+        DOMAIN,
+        "list_available_models",
+        list_models,
+        schema=vol.Schema(PROVIDER_OVERRIDE_FIELDS),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "test_provider_connection",
+        test_provider_connection,
+        schema=vol.Schema(
+            {
+                **PROVIDER_OVERRIDE_FIELDS,
+                vol.Optional(CONF_MODEL): str,
+            }
+        ),
+        supports_response=SupportsResponse.ONLY,
+    )
     hass.services.async_register(DOMAIN, "generate_blueprint", generate_blueprint, schema=vol.Schema({vol.Required("description"): str}), supports_response=SupportsResponse.ONLY)
 
 
@@ -188,6 +310,7 @@ async def async_unregister_services(hass: HomeAssistant) -> None:
         "explain_automation",
         "improve_automation",
         "list_available_models",
+        "test_provider_connection",
         "generate_blueprint",
     ):
         if hass.services.has_service(DOMAIN, service):

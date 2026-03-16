@@ -11,10 +11,17 @@ from ..helpers.errors import ModelUnavailableError, ProviderConnectionError
 
 
 class OllamaAdapter(BaseLlmAdapter):
-    def __init__(self, session: ClientSession, base_url: str, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        session: ClientSession,
+        base_url: str,
+        api_key: str | None = None,
+        timeout: int | None = None,
+    ) -> None:
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._timeout = timeout
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -25,7 +32,11 @@ class OllamaAdapter(BaseLlmAdapter):
 
     async def list_models(self) -> list[str]:
         try:
-            async with self._session.get(f"{self._base_url}/api/tags", headers=self._headers) as resp:
+            async with self._session.get(
+                f"{self._base_url}/api/tags",
+                headers=self._headers,
+                timeout=self._timeout,
+            ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
         except (ClientError, TimeoutError) as err:

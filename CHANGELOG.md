@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+- Added 2-step GUI setup/options flow with provider connection test before model selection.
+- Added explicit Ollama host/IP + port fields (with base URL normalization).
+- Added runtime service `test_provider_connection` and expanded `list_available_models` with ad-hoc endpoint overrides.
+- Added adapter timeout handling for model discovery/connection checks.
+- Added provider runtime helper and unit tests for URL/IP resolution and adapter selection.
+
 ## 1.0.0
 - Initial production-ready custom integration release.
 - Config flow and options flow for Ollama and OpenAI-compatible endpoints.

@@ -76,6 +76,72 @@ improve_automation:
 
 list_available_models:
   name: List available models
+  description: List models from configured provider or from ad-hoc provider endpoint.
+  fields:
+    provider:
+      selector:
+        select:
+          options:
+            - ollama
+            - openai_compatible
+    base_url:
+      selector:
+        text:
+    ollama_host:
+      description: Optional Ollama host/IP. If set for provider=ollama, this will override base_url.
+      selector:
+        text:
+    ollama_port:
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    api_key:
+      selector:
+        text:
+    timeout:
+      selector:
+        number:
+          min: 1
+          max: 300
+          mode: box
+
+test_provider_connection:
+  name: Test provider connection
+  description: Test provider connectivity and selected model availability.
+  fields:
+    provider:
+      selector:
+        select:
+          options:
+            - ollama
+            - openai_compatible
+    base_url:
+      selector:
+        text:
+    ollama_host:
+      description: Optional Ollama host/IP. If set for provider=ollama, this will override base_url.
+      selector:
+        text:
+    ollama_port:
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    model:
+      selector:
+        text:
+    api_key:
+      selector:
+        text:
+    timeout:
+      selector:
+        number:
+          min: 1
+          max: 300
+          mode: box
 
 generate_blueprint:
   name: Generate blueprint

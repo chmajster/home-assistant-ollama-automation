@@ -42,6 +42,7 @@ Production-ready custom Home Assistant integration (HACS) for generating, valida
 In config flow you can set:
 - integration name
 - provider (`ollama` / `openai_compatible`)
+- Ollama host/IP and port (for `ollama` provider)
 - base URL
 - model
 - optional API key
@@ -54,8 +55,13 @@ In config flow you can set:
 - safe YAML generation mode
 - history size
 
+During setup/options flow integration tests provider connection and fetches available models before model selection.
+
 ## Example service calls
 See `examples/automations/service_calls.yaml`.
+Useful runtime services:
+- `test_provider_connection` (optional ad-hoc provider/base URL/IP override)
+- `list_available_models` (optional ad-hoc provider/base URL/IP override)
 
 ## Troubleshooting
 - Verify endpoint URL and model name using `list_available_models` service.

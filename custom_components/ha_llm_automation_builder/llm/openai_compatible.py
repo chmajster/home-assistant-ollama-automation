@@ -7,14 +7,22 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .base import BaseLlmAdapter, GenerationRequest, GenerationResponse
-from ..helpers.errors import ProviderConnectionError
+from ..helpers.errors import ModelUnavailableError, ProviderConnectionError
 
 
 class OpenAICompatibleAdapter(BaseLlmAdapter):
-    def __init__(self, session: ClientSession, base_url: str, api_key: str | None) -> None:
+    def __init__(
+        self,
+        session: ClientSession,
+        base_url: str,
+        api_key: str | None,
+        timeout: int | None = None,
+    ) -> None:
         self._session = session
-        self._base_url = base_url.rstrip("/")
+        normalized = base_url.rstrip("/")
+        self._base_url = normalized[:-3] if normalized.endswith("/v1") else normalized
         self._api_key = api_key
+        self._timeout = timeout
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -25,7 +33,11 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
 
     async def list_models(self) -> list[str]:
         try:
-            async with self._session.get(f"{self._base_url}/v1/models", headers=self._headers) as resp:
+            async with self._session.get(
+                f"{self._base_url}/v1/models",
+                headers=self._headers,
+                timeout=self._timeout,
+            ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
         except (ClientError, TimeoutError) as err:
@@ -38,7 +50,9 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
 
     async def test_model(self, model: str) -> dict[str, Any]:
         models = await self.list_models()
-        return {"ok": model in models, "model": model}
+        if model not in models:
+            raise ModelUnavailableError(f"Model {model} not found")
+        return {"ok": True, "model": model}
 
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         payload = {

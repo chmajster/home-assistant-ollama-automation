@@ -19,3 +19,16 @@
         - service: light.turn_on
           target:
             entity_id: light.korytarz
+
+- service: ha_llm_automation_builder.test_provider_connection
+  data:
+    provider: ollama
+    ollama_host: 192.168.1.50
+    ollama_port: 11434
+    model: llama3.2:3b
+
+- service: ha_llm_automation_builder.list_available_models
+  data:
+    provider: ollama
+    ollama_host: 192.168.1.50
+    ollama_port: 11434

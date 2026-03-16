@@ -3,16 +3,74 @@
     "step": {
       "user": {
         "title": "LLM Automation Builder",
-        "description": "Configure provider and generation settings."
+        "description": "Configure provider endpoint and test connection before selecting a model.",
+        "data": {
+          "name": "Name",
+          "provider": "Provider",
+          "ollama_host": "Ollama host or IP",
+          "ollama_port": "Ollama port",
+          "base_url": "Base URL",
+          "api_key": "API key",
+          "timeout": "Timeout (seconds)"
+        }
+      },
+      "model": {
+        "title": "Model and Prompt",
+        "description": "Connection OK. Found {models_count} models.",
+        "data": {
+          "model": "Model",
+          "temperature": "Temperature",
+          "top_p": "Top P",
+          "max_tokens": "Max tokens",
+          "system_prompt": "System prompt",
+          "response_language": "Response language",
+          "safe_mode": "Safe YAML mode",
+          "history_limit": "History limit"
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to provider.",
+      "invalid_base_url": "Invalid base URL or host.",
+      "model_not_found": "Selected model was not found.",
+      "required": "This field is required.",
+      "unknown": "Unexpected error."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "LLM Automation Builder options",
-        "description": "Update generation and safety settings."
+        "title": "Connection Settings",
+        "description": "Update provider endpoint and test connectivity.",
+        "data": {
+          "provider": "Provider",
+          "ollama_host": "Ollama host or IP",
+          "ollama_port": "Ollama port",
+          "base_url": "Base URL",
+          "api_key": "API key",
+          "timeout": "Timeout (seconds)"
+        }
+      },
+      "model": {
+        "title": "Model and Prompt",
+        "description": "Connection OK. Found {models_count} models.",
+        "data": {
+          "model": "Model",
+          "temperature": "Temperature",
+          "top_p": "Top P",
+          "max_tokens": "Max tokens",
+          "system_prompt": "System prompt",
+          "response_language": "Response language",
+          "safe_mode": "Safe YAML mode",
+          "history_limit": "History limit"
+        }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to provider.",
+      "invalid_base_url": "Invalid base URL or host.",
+      "model_not_found": "Selected model was not found.",
+      "unknown": "Unexpected error."
     }
   }
 }

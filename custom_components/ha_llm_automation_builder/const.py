@@ -4,13 +4,15 @@ from __future__ import annotations
 
 DOMAIN = "ha_llm_automation_builder"
 PLATFORMS = ["sensor", "binary_sensor"]
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 CONF_NAME = "name"
 CONF_PROVIDER = "provider"
 CONF_BASE_URL = "base_url"
 CONF_MODEL = "model"
 CONF_API_KEY = "api_key"
+CONF_OLLAMA_HOST = "ollama_host"
+CONF_OLLAMA_PORT = "ollama_port"
 CONF_TIMEOUT = "timeout"
 CONF_TEMPERATURE = "temperature"
 CONF_TOP_P = "top_p"
@@ -25,6 +27,9 @@ PROVIDER_OPENAI_COMPATIBLE = "openai_compatible"
 
 DEFAULT_NAME = "LLM Automation Builder"
 DEFAULT_TIMEOUT = 60
+DEFAULT_OLLAMA_HOST = ""
+DEFAULT_OLLAMA_PORT = 11434
+DEFAULT_OLLAMA_BASE_URL = f"http://127.0.0.1:{DEFAULT_OLLAMA_PORT}"
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_TOP_P = 0.9
 DEFAULT_MAX_TOKENS = 1200
