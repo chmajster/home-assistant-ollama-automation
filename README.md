@@ -57,11 +57,20 @@ In config flow you can set:
 
 During setup/options flow integration tests provider connection and fetches available models before model selection.
 
+## Built-in user GUI (chat-like flow in HA)
+- Text entity `automation_prompt` for entering natural-language prompt.
+- Button `generate_automation_from_prompt` to generate YAML from prompt.
+- Button `test_connection` to verify endpoint + selected model.
+- Button `refresh_models` to load current model list.
+- Button `pull_configured_model` to download configured model to Ollama.
+- Generation output is exposed by sensor `ostatni_wygenerowany_yaml`.
+
 ## Example service calls
 See `examples/automations/service_calls.yaml`.
 Useful runtime services:
 - `test_provider_connection` (optional ad-hoc provider/base URL/IP override)
 - `list_available_models` (optional ad-hoc provider/base URL/IP override)
+- `pull_ollama_model` (download model on Ollama endpoint)
 
 ## Troubleshooting
 - Verify endpoint URL and model name using `list_available_models` service.

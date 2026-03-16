@@ -53,6 +53,21 @@ class OllamaAdapter(BaseLlmAdapter):
             raise ModelUnavailableError(f"Model {model} not found")
         return {"ok": True, "model": model}
 
+    async def pull_model(self, model: str) -> dict[str, Any]:
+        payload = {"name": model, "stream": False}
+        try:
+            async with self._session.post(
+                f"{self._base_url}/api/pull",
+                json=payload,
+                headers=self._headers,
+                timeout=self._timeout,
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        except (ClientError, TimeoutError) as err:
+            raise ProviderConnectionError(str(err)) from err
+        return {"ok": True, "model": model, "response": data}
+
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         payload = {
             "model": request.model,

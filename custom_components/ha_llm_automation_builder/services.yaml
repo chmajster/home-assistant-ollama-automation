@@ -143,6 +143,43 @@ test_provider_connection:
           max: 300
           mode: box
 
+pull_ollama_model:
+  name: Pull Ollama model
+  description: Download model to Ollama server using configured endpoint or ad-hoc endpoint override.
+  fields:
+    provider:
+      selector:
+        select:
+          options:
+            - ollama
+            - openai_compatible
+    base_url:
+      selector:
+        text:
+    ollama_host:
+      description: Optional Ollama host/IP. If set for provider=ollama, this will override base_url.
+      selector:
+        text:
+    ollama_port:
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    model:
+      required: true
+      selector:
+        text:
+    api_key:
+      selector:
+        text:
+    timeout:
+      selector:
+        number:
+          min: 1
+          max: 300
+          mode: box
+
 generate_blueprint:
   name: Generate blueprint
   fields:

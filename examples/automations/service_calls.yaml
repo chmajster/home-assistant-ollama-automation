@@ -32,3 +32,10 @@
     provider: ollama
     ollama_host: 192.168.1.50
     ollama_port: 11434
+
+- service: ha_llm_automation_builder.pull_ollama_model
+  data:
+    provider: ollama
+    ollama_host: 192.168.1.50
+    ollama_port: 11434
+    model: llama3.2:3b

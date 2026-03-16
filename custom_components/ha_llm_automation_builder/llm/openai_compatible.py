@@ -54,6 +54,9 @@ class OpenAICompatibleAdapter(BaseLlmAdapter):
             raise ModelUnavailableError(f"Model {model} not found")
         return {"ok": True, "model": model}
 
+    async def pull_model(self, model: str) -> dict[str, Any]:
+        raise ProviderConnectionError("Model pull is not supported by openai_compatible provider")
+
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         payload = {
             "model": request.model,

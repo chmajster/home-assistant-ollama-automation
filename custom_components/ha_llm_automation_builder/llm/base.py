@@ -35,5 +35,8 @@ class BaseLlmAdapter:
     async def test_model(self, model: str) -> dict[str, Any]:
         raise NotImplementedError
 
+    async def pull_model(self, model: str) -> dict[str, Any]:
+        raise NotImplementedError
+
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         raise NotImplementedError

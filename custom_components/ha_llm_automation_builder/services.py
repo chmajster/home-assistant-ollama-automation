@@ -58,6 +58,13 @@ PROVIDER_OVERRIDE_FIELDS = {
     vol.Optional(CONF_TIMEOUT): int,
 }
 
+PULL_MODEL_SCHEMA = vol.Schema(
+    {
+        **PROVIDER_OVERRIDE_FIELDS,
+        vol.Required(CONF_MODEL): str,
+    }
+)
+
 
 async def async_register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, "generate_automation"):
@@ -243,6 +250,40 @@ async def async_register_services(hass: HomeAssistant) -> None:
             "models": models,
         }
 
+    async def pull_ollama_model(call: ServiceCall) -> ServiceResponse:
+        _, provider, base_url, adapter = await _resolve_adapter(call)
+        model = call.data.get(CONF_MODEL)
+        if provider != PROVIDER_OLLAMA:
+            return {
+                "ok": False,
+                "provider": provider,
+                "base_url": base_url,
+                "model": model,
+                "error": "pull_supported_only_for_ollama",
+            }
+
+        try:
+            pull_result = await adapter.pull_model(model)
+            models = await adapter.list_models()
+        except ProviderConnectionError as err:
+            return {
+                "ok": False,
+                "provider": provider,
+                "base_url": base_url,
+                "model": model,
+                "error": str(err),
+            }
+
+        return {
+            "ok": True,
+            "provider": provider,
+            "base_url": base_url,
+            "model": model,
+            "models_count": len(models),
+            "models": models,
+            "pull_result": pull_result,
+        }
+
     async def generate_blueprint(call: ServiceCall) -> ServiceResponse:
         runtime = await _resolve_runtime()
         prompt = f"Generate a Home Assistant blueprint YAML for: {call.data['description']}"
@@ -299,6 +340,13 @@ async def async_register_services(hass: HomeAssistant) -> None:
         ),
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        "pull_ollama_model",
+        pull_ollama_model,
+        schema=PULL_MODEL_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
     hass.services.async_register(DOMAIN, "generate_blueprint", generate_blueprint, schema=vol.Schema({vol.Required("description"): str}), supports_response=SupportsResponse.ONLY)
 
 
@@ -311,6 +359,7 @@ async def async_unregister_services(hass: HomeAssistant) -> None:
         "improve_automation",
         "list_available_models",
         "test_provider_connection",
+        "pull_ollama_model",
         "generate_blueprint",
     ):
         if hass.services.has_service(DOMAIN, service):

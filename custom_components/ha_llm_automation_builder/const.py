@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 DOMAIN = "ha_llm_automation_builder"
-PLATFORMS = ["sensor", "binary_sensor"]
-VERSION = "1.1.0"
+PLATFORMS = ["sensor", "binary_sensor", "button", "text"]
+VERSION = "1.2.0"
 
 CONF_NAME = "name"
 CONF_PROVIDER = "provider"
