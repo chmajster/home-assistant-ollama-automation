@@ -1,13 +1,55 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 OPTIONS_FILE="/data/options.json"
 MODELS_DIR="/data/models"
 
-MODEL="$(jq -r '.model // "llama3.2:3b"' "${OPTIONS_FILE}")"
-AUTO_PULL="$(jq -r '.auto_pull // true' "${OPTIONS_FILE}")"
-KEEP_ALIVE="$(jq -r '.keep_alive // "5m"' "${OPTIONS_FILE}")"
-ORIGINS="$(jq -r '.origins // "*"' "${OPTIONS_FILE}")"
+json_get_string() {
+  key="$1"
+  default="$2"
+
+  if [ ! -f "${OPTIONS_FILE}" ]; then
+    printf "%s" "${default}"
+    return
+  fi
+
+  value="$(
+    sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "${OPTIONS_FILE}" \
+      | head -n 1
+  )"
+
+  if [ -n "${value}" ]; then
+    printf "%s" "${value}"
+  else
+    printf "%s" "${default}"
+  fi
+}
+
+json_get_bool() {
+  key="$1"
+  default="$2"
+
+  if [ ! -f "${OPTIONS_FILE}" ]; then
+    printf "%s" "${default}"
+    return
+  fi
+
+  value="$(
+    sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\\(true\\|false\\).*/\\1/p" "${OPTIONS_FILE}" \
+      | head -n 1
+  )"
+
+  if [ -n "${value}" ]; then
+    printf "%s" "${value}"
+  else
+    printf "%s" "${default}"
+  fi
+}
+
+MODEL="$(json_get_string "model" "llama3.2:3b")"
+AUTO_PULL="$(json_get_bool "auto_pull" "true")"
+KEEP_ALIVE="$(json_get_string "keep_alive" "5m")"
+ORIGINS="$(json_get_string "origins" "*")"
 
 mkdir -p "${MODELS_DIR}"
 
@@ -19,16 +61,25 @@ export OLLAMA_KEEP_ALIVE="${KEEP_ALIVE}"
 echo "[INFO] Starting Ollama server on ${OLLAMA_HOST}"
 ollama serve &
 OLLAMA_PID=$!
+trap 'kill "${OLLAMA_PID}" 2>/dev/null || true' INT TERM
 
 echo "[INFO] Waiting for Ollama API..."
-for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:11434/api/tags" >/dev/null; then
+READY=0
+ATTEMPT=0
+while [ "${ATTEMPT}" -lt 60 ]; do
+  if ollama list >/dev/null 2>&1; then
+    READY=1
     break
   fi
+  ATTEMPT=$((ATTEMPT + 1))
   sleep 1
 done
 
-if [[ "${AUTO_PULL}" == "true" ]]; then
+if [ "${READY}" -ne 1 ]; then
+  echo "[WARN] Ollama API did not become ready within 60 seconds."
+fi
+
+if [ "${AUTO_PULL}" = "true" ] && [ "${READY}" -eq 1 ]; then
   echo "[INFO] Pulling model: ${MODEL}"
   ollama pull "${MODEL}" || echo "[WARN] Could not pull model ${MODEL}. You can pull it manually later."
 fi
